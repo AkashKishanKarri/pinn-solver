@@ -1,0 +1,23 @@
+# Render Blueprint: one-click deploy at
+# https://render.com/deploy?repo=https://github.com/AkashKishanKarri/pinn-solver
+services:
+  - type: web
+    name: pinn-solver
+    runtime: docker
+    plan: free            # 512 MB RAM, 0.1 CPU, sleeps when idle; use "starter" or larger for faster training
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: PORT
+        value: "10000"
+      - key: OMP_NUM_THREADS          # one small CPU: avoid thread oversubscription
+        value: "1"
+      - key: MALLOC_ARENA_MAX         # keeps glibc from reserving extra memory per thread
+        value: "2"
+      - key: PINN_MAX_POINTS          # fits a solve in 512 MB (measured peak ~400 MB at the default)
+        value: "6000"
+      - key: PINN_MAX_QUEUED
+        value: "3"
+      - key: PINN_MAX_RUNS_KEPT
+        value: "50"

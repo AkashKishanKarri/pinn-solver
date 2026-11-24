@@ -24,6 +24,7 @@ import copy
 import hashlib
 import json
 import math
+import os
 from dataclasses import asdict, dataclass, field
 from typing import Dict, List, Optional
 
@@ -49,7 +50,9 @@ DEFAULT_THRESHOLDS = {
 # Default compute budgets (wall-clock seconds for all PINN training of one solve).
 DEFAULT_TIME_BUDGET = {ODE_IVP: 60.0, ODE_BVP: 60.0, PDE_PARABOLIC: 180.0}
 MAX_TIME_BUDGET = 900.0
-MAX_POINTS = 20000
+# Collocation-point cap. A small host (e.g. 512 MB RAM) can lower it with PINN_MAX_POINTS;
+# the default never binds for the benchmark problems, so published results are unaffected.
+MAX_POINTS = max(512, min(20000, int(os.environ.get("PINN_MAX_POINTS", "20000"))))
 
 
 @dataclass
@@ -170,6 +173,7 @@ class StrategySelector:
                 cfg.adaptive = True
                 self._fire(cfg, "R5", f"stiffness index {float(f['stiffness_index']):.0f} (> 50): fast transient; adaptive points from the start; implicit solver (Radau) used as reference.")
             cfg.max_points = int(min(MAX_POINTS, cfg.n_collocation * 4))
+            self._cap_points(cfg)
             cfg.rar_k = max(16, cfg.n_collocation // 4)
             cfg.rar_candidates = 4096
             cfg.rar_every = 1000
@@ -188,9 +192,16 @@ class StrategySelector:
                 cfg.adam_iters, cfg.lbfgs_iters = 6000, 3000
                 self._fire(cfg, "R7", f"Peclet number {float(f['peclet_number']):.0f} (> 100) suggests a steep front: 5x48 network, residual-based refinement from the start; gPINN may be tried on retry.")
             cfg.max_points = int(min(MAX_POINTS, cfg.n_collocation * 2))
+            self._cap_points(cfg)
             cfg.rar_k = 256
             cfg.rar_candidates = 16384
             cfg.rar_every = 1000
+
+    def _cap_points(self, cfg: TrainingConfig) -> None:
+        if cfg.n_collocation > cfg.max_points:
+            cfg.reasons.append(f"Collocation points capped at {cfg.max_points} by this server's point limit "
+                               f"(the rules asked for {cfg.n_collocation}); accuracy may be lower.")
+            cfg.n_collocation = cfg.max_points
 
     def _apply_mode(self, spec: EquationSpec, cfg: TrainingConfig, mode: str) -> None:
         hard_ok, _ = hard_constraint_plan(spec)

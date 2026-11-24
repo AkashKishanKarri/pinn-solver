@@ -595,18 +595,22 @@ python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
                 "calls <font face='DVM'>/api/health</font>."),
               code('''docker build -t pinn-solver . && docker run -p 7860:7860 pinn-solver'''),
               P("10.3 Hosting", H2),
-              P("The live demo runs on a <b>Hugging Face Docker Space</b> (free CPU: 2 vCPU, 16 GB RAM), deployed with "
-                "<font face='DVM'>scripts/deploy_hf_space.sh &lt;user&gt;/&lt;space&gt;</font>. Render, Railway and Fly.io "
-                "work the same way from the Dockerfile. Serverless platforms such as Vercel or AWS Lambda are <i>not</i> "
-                "suitable: a solve trains for up to 15 minutes in a background thread, and job state is kept in memory "
-                "between requests, so both need a long-lived process. A free Space sleeps after a period of inactivity "
-                "and takes about 30 s to wake on the first visit."),
+              P("The live demo runs on <b>Render</b> (free plan) from the Blueprint in <font face='DVM'>render.yaml</font>, "
+                "which redeploys on every push to main. The free plan has 512 MB RAM and 0.1 CPU. The blueprint "
+                "therefore caps collocation points at 6000 (the measured peak memory of a PDE solve is about 400 MB) "
+                "and uses one thread. Training there is roughly 10× slower than on a laptop, so within the default "
+                "budgets more problems end in the labelled numerical fallback. The benchmark numbers in Section 7 "
+                "were measured on a laptop. Docker Spaces on Hugging Face need a PRO subscription; "
+                "<font face='DVM'>scripts/deploy_hf_space.sh</font> deploys there. Railway and Fly.io work from the same "
+                "Dockerfile. Serverless platforms (Vercel, AWS Lambda) are <i>not</i> suitable: a solve trains for up to "
+                "15 minutes in a background thread and job state is kept in memory between requests."),
               table([["Environment variable", "Default", "Meaning"],
                      ["PORT", "7860 (Docker)", "HTTP port"],
                      ["PINN_RUNS_DIR", "runs/ (/tmp/pinn-runs in Docker)", "Where run artefacts are written"],
                      ["PINN_MAX_CONCURRENT", "1", "Training jobs in parallel"],
                      ["PINN_MAX_QUEUED", "8", "Jobs allowed to wait"],
-                     ["PINN_MAX_RUNS_KEPT", "200", "Run folders kept on disk"]], [0.3, 0.3, 0.4])]
+                     ["PINN_MAX_RUNS_KEPT", "200", "Run folders kept on disk"],
+                     ["PINN_MAX_POINTS", "20000", "Collocation-point cap (512–20000) for small-memory hosts"]], [0.3, 0.3, 0.4])]
 
     # 11 Testing
     story += [PageBreak(), P("11. Testing and quality assurance", H1),

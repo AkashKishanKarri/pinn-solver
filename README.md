@@ -255,18 +255,18 @@ docker build -t pinn-solver .
 docker run -p 7860:7860 pinn-solver          # http://localhost:7860
 ```
 
-**Hugging Face Spaces (free, used for the live demo).** Create a Space with the *Docker* SDK and push this repository to it.
-The Space's `README.md` needs the front matter below, which `scripts/deploy_hf_space.sh` adds for you.
+**Render (free tier, used for the live demo).** The repository contains a Render Blueprint (`render.yaml`).
+Click [**Deploy to Render**](https://render.com/deploy?repo=https://github.com/AkashKishanKarri/pinn-solver), sign in
+with GitHub and confirm; Render builds the Dockerfile and redeploys on every push to `main`. On the free plan
+(512 MB RAM, 0.1 CPU) the blueprint caps collocation points at 6000 (`PINN_MAX_POINTS`); the measured peak memory
+of a PDE solve is about 400 MB. Training is roughly 10× slower than on a laptop, so within the default budgets more
+problems end in the labelled numerical fallback. The service sleeps after 15 minutes idle and takes about a minute
+to wake. For the accuracy reported in `benchmark_results/`, use a paid plan or run locally.
 
-```yaml
----
-title: PINN Equation Solver
-sdk: docker
-app_port: 7860
----
-```
+**Hugging Face Spaces.** Docker Spaces now require a PRO subscription. With one, run
+`scripts/deploy_hf_space.sh <user>/<space>`, which adds the required README front matter and uploads the repository.
 
-**Render / Railway / Fly.io.** Point the service at this repository and choose the Dockerfile. The platform sets `PORT`.
+**Railway / Fly.io / any Docker host.** Point the service at the Dockerfile; the platform sets `PORT`.
 
 Why not serverless (Vercel, Lambda)? A solve trains for up to 15 minutes in a background thread, and job state is kept in
 memory between requests. Both need a long-lived process.
@@ -278,6 +278,7 @@ memory between requests. Both need a long-lived process.
 | `PINN_MAX_CONCURRENT` | `1` | Training jobs run in parallel |
 | `PINN_MAX_QUEUED` | `8` | Jobs that may wait |
 | `PINN_MAX_RUNS_KEPT` | `200` | Run folders kept on disk |
+| `PINN_MAX_POINTS` | `20000` | Collocation-point cap (512–20000); lower it on small-memory hosts |
 
 ## Project structure
 
@@ -302,6 +303,7 @@ scripts/             run_benchmarks.py, deploy_hf_space.sh
 benchmark_results/   measured results of configurations A–E (summary.md, csv, json)
 docs/                PDF documentation and its generator
 Dockerfile           production image
+render.yaml          Render Blueprint (free-tier settings)
 ```
 
 ## Not implemented (by design, per the brief's roadmap)
