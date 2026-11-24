@@ -15,9 +15,13 @@ ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PIP_NO_CACHE_DIR=1 \
     MPLBACKEND=Agg PINN_RUNS_DIR=/tmp/pinn-runs PORT=7860
 WORKDIR /app
 COPY requirements.txt ./
-# CPU wheel of the pinned torch version (the default wheel bundles CUDA, ~2.5 GB larger).
-RUN pip install --index-url https://download.pytorch.org/whl/cpu "$(grep '^torch==' requirements.txt)" \
- && pip install -r requirements.txt
+# Torch itself comes from the CPU-only index (the default wheel bundles CUDA, ~2.5 GB larger); everything
+# else, including torch's own dependencies, from PyPI. Binary wheels only: never compile from source.
+RUN pip install --upgrade pip \
+ && pip install --only-binary=:all: --no-deps --index-url https://download.pytorch.org/whl/cpu "$(grep '^torch==' requirements.txt)" \
+ && pip install --only-binary=:all: -r requirements.txt filelock fsspec jinja2 networkx typing-extensions \
+ && pip check \
+ && python -c "import torch, scipy, fastapi; print('torch', torch.__version__)"
 COPY pinnsolver/ ./pinnsolver/
 COPY --from=ui /ui/dist ./frontend/dist
 # Hugging Face Spaces run the container as uid 1000.
