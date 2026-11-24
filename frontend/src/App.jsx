@@ -1,6 +1,15 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { api } from './api.js'
-import Plot from './Plot.jsx'
+
+// Plotly is ~4.5 MB; load it only when a chart is first shown so the form appears immediately.
+const LazyPlot = lazy(() => import('./Plot.jsx'))
+function Plot(props) {
+  return (
+    <Suspense fallback={<div className="muted" style={{ height: props.height || 320 }}>Loading chart…</div>}>
+      <LazyPlot {...props} />
+    </Suspense>
+  )
+}
 import katex from 'katex'
 import 'katex/dist/katex.min.css'
 
@@ -189,7 +198,7 @@ export default function App() {
   const pollRef = useRef(null)
 
   useEffect(() => {
-    api.info().then(setInfo).catch((e) => setFormError(`Cannot reach the solver API: ${e.message}`))
+    api.info().then(setInfo).catch((e) => setFormError(e.message))
     api.benchmarks().then((b) => {
       setBenchmarks(b)
       if (b.length && !/^#job=/.test(window.location.hash)) choosePreset(b[0], true)

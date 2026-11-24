@@ -69,7 +69,7 @@ def test_classifies_supported_classes():
     (dict(equation="u' = u", conditions=["u(1)=1"]), "start of the interval"),
     (dict(equation="u' = u", conditions=["u(0.5)=1"]), "not an end point"),
     (dict(equation="u'' = u", conditions=["u'(0)=1", "u'(1)=0"]), "Neumann"),
-    (dict(equation="u' = u", conditions=["u(0)=1", "u(0)=2"]), "duplicates"),
+    (dict(equation="u' = u", conditions=["u(0)=1", "u(0)=2"]), "duplicate or conflicting"),
     (dict(equation="u = 1", conditions=["u(0)=1"]), "no derivative"),
     (dict(equation="u' = u", conditions=[]), "No initial"),
     (dict(equation="u' = u", conditions=["u(0)=1"], domain={"t": (1, 0)}), "lower < upper"),

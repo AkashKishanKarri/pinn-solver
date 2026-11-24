@@ -214,7 +214,11 @@ class StrategySelector:
             else:
                 cfg.adaptive = True
                 cfg.n_collocation = max(cfg.rar_k, cfg.max_points // 2)
-            cfg.reasons.append(f"Mode {mode}: {MODE_NAMES[mode]} (fixed recipe for the ablation study).")
+            overrides = ["Adam only (no L-BFGS)", "one attempt, no numerical fallback"]
+            if mode == "A" and hard_ok:
+                overrides.insert(0, "all conditions imposed as penalty terms, NOT built into the trial solution (overrides the rule above)")
+            overrides.append("adaptive collocation" if mode == "C" else "fixed uniform collocation points")
+            cfg.reasons.append(f"Mode {mode}: {MODE_NAMES[mode]} (fixed recipe for the ablation study): " + "; ".join(overrides) + ".")
             return
         # D: proposed solver.
         cfg.hard_constraints = hard_ok

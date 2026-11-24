@@ -11,6 +11,7 @@ Run:  uvicorn pinnsolver.api:app --port 8000
 from __future__ import annotations
 
 import os
+import shutil
 import threading
 import time
 import traceback
@@ -19,7 +20,10 @@ from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from typing import Deque, Dict, List, Literal, Optional
 
-from fastapi import FastAPI, HTTPException
+import math
+
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, field_validator
@@ -39,6 +43,8 @@ FRONTEND_DIST = os.path.join(ROOT, "frontend", "dist")
 MAX_CONCURRENT = int(os.environ.get("PINN_MAX_CONCURRENT", "1"))
 MAX_QUEUED = int(os.environ.get("PINN_MAX_QUEUED", "8"))
 MAX_JOBS_KEPT = 50
+MAX_RUNS_KEPT = int(os.environ.get("PINN_MAX_RUNS_KEPT", "200"))  # saved run folders on disk
+THRESHOLD_KEYS = frozenset(k for d in DEFAULT_THRESHOLDS.values() for k in d)
 TRAINING_TRACE_KEPT = 600
 
 
@@ -88,9 +94,24 @@ class JobRequest(BaseModel):
     problem: ProblemModel
     mode: Literal["A", "B", "C", "D", "E"] = "D"
     seed: int = Field(default=0, ge=0, le=2**31 - 1)
-    time_budget: Optional[float] = Field(default=None, gt=0, le=MAX_TIME_BUDGET)
+    time_budget: Optional[float] = Field(default=None, gt=0, le=MAX_TIME_BUDGET, allow_inf_nan=False)
     thresholds: Optional[Dict[str, float]] = None
     ablate: List[str] = Field(default_factory=list)
+
+    @field_validator("thresholds")
+    @classmethod
+    def _thresholds(cls, v):
+        # A non-finite or non-positive threshold would make every result "pass" (or none);
+        # an unknown key would be silently ignored. Both are rejected.
+        if v is None:
+            return v
+        bad = [k for k in v if k not in THRESHOLD_KEYS]
+        if bad:
+            raise ValueError(f"unknown threshold(s) {bad}; allowed: {sorted(THRESHOLD_KEYS)}")
+        for k, x in v.items():
+            if not (math.isfinite(x) and 0 < x <= 1e3):
+                raise ValueError(f"threshold {k!r} must be a finite number in (0, 1000]")
+        return v
 
     @field_validator("ablate")
     @classmethod
@@ -164,6 +185,17 @@ def _jsonable(e: dict) -> dict:
     return out
 
 
+def _prune_runs() -> None:
+    """Keep at most MAX_RUNS_KEPT saved run folders so a long-lived deployment cannot fill its disk."""
+    try:
+        runs = [os.path.join(RUNS_DIR, d) for d in os.listdir(RUNS_DIR)]
+        runs = sorted((r for r in runs if os.path.isdir(r)), key=os.path.getmtime)
+        for r in runs[:max(0, len(runs) - MAX_RUNS_KEPT)]:
+            shutil.rmtree(r, ignore_errors=True)
+    except OSError:
+        pass
+
+
 class JobManager:
     def __init__(self):
         self.jobs: Dict[str, Job] = {}
@@ -181,12 +213,15 @@ class JobManager:
             job = Job(req)
             self.jobs[job.id] = job
             self.order.append(job.id)
-            while len(self.order) > MAX_JOBS_KEPT:
-                old = self.order.popleft()
-                if self.jobs.get(old) and self.jobs[old].state in ("queued", "running"):
-                    self.order.append(old)
-                    break
-                self.jobs.pop(old, None)
+            if len(self.order) > MAX_JOBS_KEPT:  # forget the oldest finished jobs, never in-progress ones
+                excess = len(self.order) - MAX_JOBS_KEPT
+                for old in list(self.order):
+                    if excess == 0:
+                        break
+                    if self.jobs[old].state not in ("queued", "running"):
+                        self.order.remove(old)
+                        self.jobs.pop(old, None)
+                        excess -= 1
         self.pool.submit(self._run, job)
         return job
 
@@ -211,6 +246,7 @@ class JobManager:
             traceback.print_exc()
         finally:
             job.finished = time.time()
+            _prune_runs()
 
     def get(self, job_id: str) -> Job:
         job = self.jobs.get(job_id)
@@ -221,6 +257,14 @@ class JobManager:
 
 manager = JobManager()
 app = FastAPI(title="Intelligent Differential Equation Solver (PINN)", version="1.0.0")
+
+
+@app.exception_handler(RequestValidationError)
+async def _request_validation_error(request: Request, exc: RequestValidationError):
+    # The default handler echoes the offending input back; a NaN/Infinity input (accepted by the
+    # JSON parser) cannot be serialised and turned a 422 into a 500. Drop the raw input instead.
+    errors = [{k: v for k, v in e.items() if k not in ("input", "ctx", "url")} for e in exc.errors()]
+    return JSONResponse(status_code=422, content={"detail": errors})
 
 
 # ----------------------------------------------------------------------

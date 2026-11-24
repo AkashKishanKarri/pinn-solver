@@ -1,16 +1,49 @@
 # Intelligent Differential Equation Solver Using PINNs
 
-This is the working implementation of the capstone project described in
-`capstone_deliverables/` (report, Review-2 slides, poster). It is an
-**equation-aware, validation-driven PINN solver**:
+**Live demo:** LIVE_URL_PLACEHOLDER
+**Documentation (PDF):** [`docs/PINN_Solver_Documentation.pdf`](docs/PINN_Solver_Documentation.pdf)
 
-1. It parses a supported ODE/PDE safely.
-2. It chooses a training strategy from a visible rule table.
-3. It trains a physics-informed neural network within a compute budget.
-4. It validates the result on fresh points against an exact or numerical reference.
-5. It refines or retries if the result fails, then falls back to a clearly labelled numerical solver.
+An **equation-aware, validation-driven solver for physics-informed neural networks (PINNs)**. You type an ODE or 1D parabolic
+PDE in plain math notation. The solver:
 
-Every result comes with a full provenance report.
+1. Parses the problem safely and rejects anything it cannot solve, with a reason.
+2. Picks a training strategy from a visible rule table (R1–R9).
+3. Trains a PINN within a compute budget.
+4. Validates the result on fresh points against an exact or numerical reference.
+5. Refines or retries if the result fails. If the thresholds are still not met, it falls back to a numerical solver and labels the result clearly as such.
+
+Every result comes with a full provenance report: the strategy and the reasons for it, every attempt, the losses, the errors, and the plots.
+
+> Capstone project. The design report, review slides and poster are kept outside this repository (`../capstone review - 1`, `../capstone review - 2`).
+
+## Features at a glance
+
+| | |
+|---|---|
+| **Problem classes** | First- and second-order ODE initial value problems, second-order two-point BVPs (Dirichlet/Neumann), 1D parabolic PDEs (heat, reaction–diffusion, viscous Burgers) |
+| **Input** | Plain math such as `u'' + 4u = 0`, `du/dt = -k u`, `∂u/∂t = 0.1 ∂²u/∂x²`, checked and typeset live in the UI |
+| **Safety** | Own recursive-descent parser: no `eval`, no SymPy `parse_expr`/`lambdify` on user text. Bounded sizes, depths, budgets and queue |
+| **Numerics** | float64 PyTorch, hard constraints where exact, Adam → L-BFGS, RAR adaptive collocation, causal time-marching, gPINN |
+| **Honesty** | Pre-declared thresholds, independent validation points, reference-error estimates, labelled fallback, all failed runs reported |
+| **Interfaces** | React + KaTeX + Plotly web UI, REST API (FastAPI), CLI, Python API |
+| **Quality** | 138 automated tests; benchmark suite of 9 problems × 5 configurations × 3 seeds |
+
+## Architecture
+
+```mermaid
+flowchart LR
+  UI[React UI] -->|REST JSON| API[FastAPI api.py<br/>job queue]
+  CLI[CLI __main__.py] --> S
+  API --> S[Solver.solve<br/>solver.py]
+  S --> P[Parser + expr.py<br/>M1–M3]
+  S --> ST[StrategySelector<br/>R1–R9, M4]
+  S --> R[References<br/>SciPy / FD, M8]
+  S --> T[Trainer + PINN<br/>Adam→L-BFGS, RAR, M5–M6]
+  T --> V[Validator, M7]
+  V -->|fail| T
+  V --> RG[ReportGenerator, M9]
+  RG --> D[(runs/&lt;id&gt;/<br/>json, md, csv, png)]
+```
 
 ## Quick start
 
@@ -31,7 +64,7 @@ Command line, without the UI:
 ```bash
 .venv/bin/python -m pinnsolver --benchmark heat           # built-in benchmark
 .venv/bin/python -m pinnsolver my_problem.json --mode D   # your own problem (JSON, see below)
-.venv/bin/python -m pytest -q                             # 134 tests
+.venv/bin/python -m pytest -q                             # 138 tests
 .venv/bin/python scripts/run_benchmarks.py --seeds 0 1 2  # configurations A-E, all problems
 ```
 
@@ -103,7 +136,10 @@ never pretends to solve it.
 - Derivative order ≤ 2.
 - Time budget ≤ 900 s.
 - At most 20 000 collocation points.
-- One training job at a time, with up to 8 queued.
+- One training job at a time, with up to 8 queued (`PINN_MAX_CONCURRENT`, `PINN_MAX_QUEUED`).
+- Custom thresholds must be known keys (`rel_l2`, `condition_max`, `residual_rms`) with finite values in (0, 1000].
+- NaN/Infinity anywhere in a request is rejected with HTTP 422.
+- The server keeps the last 50 jobs in memory and the last 200 run folders on disk (`PINN_MAX_RUNS_KEPT`).
 
 A problem file for the CLI or API:
 
@@ -186,6 +222,87 @@ A–E on all nine problems with three seeds each. Every configuration of a
 problem gets the same time budget and the same point budget. All failed runs
 are listed. These are the only performance numbers this project reports. No
 speed-up or accuracy claim is made beyond them.
+
+## REST API
+
+All endpoints take and return JSON. Interactive docs: `/docs` (Swagger UI) on any running server.
+
+| Method | Path | Purpose |
+|---|---|---|
+| `GET` | `/api/health` | Liveness, and how many jobs are in progress |
+| `GET` | `/api/info` | Modes, rule table, thresholds, limits, grammar |
+| `GET` | `/api/benchmarks` | The nine built-in benchmark problems |
+| `POST` | `/api/validate` | Parse and classify a problem without training (`422` with the reason if it is rejected) |
+| `POST` | `/api/jobs` | Start a solve: `{"problem": {...}, "mode": "D", "seed": 0, "time_budget": 60, "thresholds": {...}, "ablate": []}` → `202` |
+| `GET` | `/api/jobs` | Recent jobs |
+| `GET` | `/api/jobs/{id}` | State, stage, events and live loss trace |
+| `GET` | `/api/jobs/{id}/report` | Full report (`409` until the job is done) |
+| `POST` | `/api/jobs/{id}/cancel` | Cancel a queued or running job |
+| `GET` | `/api/runs/{run_id}/{file}` | Saved artefacts: `report.json`, `report.md`, `problem.json`, `reference.json`, `training_log.csv`, `solution.png`, `loss.png` |
+
+```bash
+curl -X POST localhost:8000/api/jobs -H 'Content-Type: application/json' \
+  -d '{"problem": {"equation": "u'"'"' = -u", "variables": ["t"], "domain": {"t": [0, 1]}, "conditions": ["u(0) = 1"]}}'
+```
+
+## Deployment
+
+The repository ships a production `Dockerfile`. It is a multi-stage build: Node builds the UI, then a slim Python image installs
+CPU-only PyTorch (~200 MB instead of ~2.5 GB with CUDA) and serves the API and UI with uvicorn on `$PORT` (default 7860).
+
+```bash
+docker build -t pinn-solver .
+docker run -p 7860:7860 pinn-solver          # http://localhost:7860
+```
+
+**Hugging Face Spaces (free, used for the live demo).** Create a Space with the *Docker* SDK and push this repository to it.
+The Space's `README.md` needs the front matter below, which `scripts/deploy_hf_space.sh` adds for you.
+
+```yaml
+---
+title: PINN Equation Solver
+sdk: docker
+app_port: 7860
+---
+```
+
+**Render / Railway / Fly.io.** Point the service at this repository and choose the Dockerfile. The platform sets `PORT`.
+
+Why not serverless (Vercel, Lambda)? A solve trains for up to 15 minutes in a background thread, and job state is kept in
+memory between requests. Both need a long-lived process.
+
+| Environment variable | Default | Meaning |
+|---|---|---|
+| `PORT` | `7860` (Docker) | HTTP port |
+| `PINN_RUNS_DIR` | `runs/` (`/tmp/pinn-runs` in Docker) | Where run artefacts are written |
+| `PINN_MAX_CONCURRENT` | `1` | Training jobs run in parallel |
+| `PINN_MAX_QUEUED` | `8` | Jobs that may wait |
+| `PINN_MAX_RUNS_KEPT` | `200` | Run folders kept on disk |
+
+## Project structure
+
+```
+pinnsolver/          numerical core + API
+  expr.py            restricted expression grammar and evaluator (NumPy and Torch)
+  parser.py          problem validation and classification, friendly-notation rewriting
+  spec.py            ProblemInput, EquationSpec, Condition
+  strategy.py        rule table R1–R9, TrainingConfig, configurations A–E
+  pinn.py            MLP and hard-constraint trial solutions
+  training.py        Trainer (Adam, L-BFGS, time-marching, gPINN) and AdaptiveSampler
+  references.py      analytical, solve_ivp, solve_bvp and finite-difference references
+  validation.py      Validator and acceptance thresholds
+  solver.py          the control loop (Fig. 6.1)
+  report.py          report.json / report.md / plots
+  benchmarks.py      nine benchmark problems
+  api.py             FastAPI app, job queue, static UI
+  __main__.py        command-line interface
+frontend/            React (Vite) UI: App.jsx, Plot.jsx (Plotly, lazy-loaded), api.js
+tests/               138 pytest tests
+scripts/             run_benchmarks.py, deploy_hf_space.sh
+benchmark_results/   measured results of configurations A–E (summary.md, csv, json)
+docs/                PDF documentation and its generator
+Dockerfile           production image
+```
 
 ## Not implemented (by design, per the brief's roadmap)
 

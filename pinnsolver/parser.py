@@ -352,7 +352,8 @@ class Parser:
                 _fail(f"Condition {text!r}: give the point as a number, e.g. {_pretty(self.dep, key[0])}({lo:g}) = ...")
             at, side = self._snap(var, vals[0], text)
             if (side, key) in seen:
-                _fail(f"Condition {text!r} duplicates another condition.")
+                _fail(f"Condition {text!r} prescribes {_pretty(self.dep, key[0])} at the same point as another condition "
+                      "(duplicate or conflicting conditions); give each condition once.")
             seen.add((side, key))
             conds.append(Condition(text=text, var=var, at=at, deriv=key, value=value, role="boundary", side=side))
 
@@ -568,7 +569,8 @@ class Parser:
                 role, var = "boundary", xs
             tag = (role, side)
             if tag in have:
-                _fail(f"Condition {text!r} duplicates another condition.")
+                _fail(f"Condition {text!r} prescribes the {role} condition{'' if side is None else ' on the ' + side + ' boundary'} "
+                      "a second time (duplicate or conflicting conditions); give each condition once.")
             have.add(tag)
             free = self.coord_by_name[xs if role == "initial" else "t"]
             _check_defined(value, (free,), [self.domain[str(free)]], f"Condition {text!r}")
