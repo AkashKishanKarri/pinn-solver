@@ -1,6 +1,6 @@
 # Intelligent Differential Equation Solver Using PINNs
 
-**Live demo:** LIVE_URL_PLACEHOLDER
+**Live demo:** https://pinn-solver.onrender.com (free tier: the first visit after 15 idle minutes takes about a minute to wake up)  
 **Documentation (PDF):** [`docs/PINN_Solver_Documentation.pdf`](docs/PINN_Solver_Documentation.pdf)
 
 An **equation-aware, validation-driven solver for physics-informed neural networks (PINNs)**. You type an ODE or 1D parabolic
