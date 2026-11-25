@@ -3,15 +3,25 @@ const BACKEND_DOWN =
   'The solver server is offline right now (it runs on the author\'s laptop). Please try again later. ' +
   'Running locally? Start it with: .venv/bin/uvicorn pinnsolver.api:app --port 8000'
 
+// Every call is short (training runs as a background job), so a request that has not answered
+// in 20 s means the server is unreachable: e.g. the laptop hosting it is asleep, and the proxy
+// would otherwise keep the request hanging.
+const REQUEST_TIMEOUT_MS = 20000
+
 async function request(path, options = {}) {
   let res
+  const ctrl = new AbortController()
+  const timer = setTimeout(() => ctrl.abort(), REQUEST_TIMEOUT_MS)
   try {
     res = await fetch(path, {
       headers: { 'Content-Type': 'application/json' },
       ...options,
+      signal: ctrl.signal,
     })
   } catch {
     throw new Error(BACKEND_DOWN)
+  } finally {
+    clearTimeout(timer) // only the wait for the response headers is limited, not reading a large report
   }
   let body = null
   try {
