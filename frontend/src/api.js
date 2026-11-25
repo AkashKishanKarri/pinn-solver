@@ -1,7 +1,7 @@
 // Thin client for the FastAPI backend.
 const BACKEND_DOWN =
-  'Cannot reach the solver backend. If the server is waking up, wait a few seconds and reload; ' +
-  'when running locally, start it with: .venv/bin/uvicorn pinnsolver.api:app --port 8000'
+  'The solver server is offline right now (it runs on the author\'s laptop). Please try again later. ' +
+  'Running locally? Start it with: .venv/bin/uvicorn pinnsolver.api:app --port 8000'
 
 async function request(path, options = {}) {
   let res

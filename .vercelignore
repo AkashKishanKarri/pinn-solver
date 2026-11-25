@@ -1,0 +1,8 @@
+.venv/
+runs/
+benchmark_results/
+docs/
+tests/
+*.log
+frontend/node_modules/
+frontend/dist/
