@@ -4,3 +4,5 @@ runs/
 __pycache__/
 .pytest_cache/
 frontend/dist/
+.vercel
+.env*.local
