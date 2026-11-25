@@ -1,6 +1,7 @@
 # Intelligent Differential Equation Solver Using PINNs
 
-**Live demo:** https://pinn-solver.onrender.com (free tier: the first visit after 15 idle minutes takes about a minute to wake up)  
+**Live demo:** https://pinn-solver-rust.vercel.app — the UI is on Vercel; the solver runs on the author's laptop, so
+it answers only while that is on. Always-on backup (slower, ~1 min to wake): https://pinn-solver.onrender.com  
 **Documentation (PDF):** [`docs/PINN_Solver_Documentation.pdf`](docs/PINN_Solver_Documentation.pdf)
 
 An **equation-aware, validation-driven solver for physics-informed neural networks (PINNs)**. You type an ODE or 1D parabolic
@@ -255,7 +256,12 @@ docker build -t pinn-solver .
 docker run -p 7860:7860 pinn-solver          # http://localhost:7860
 ```
 
-**Render (free tier, used for the live demo).** The repository contains a Render Blueprint (`render.yaml`).
+**Vercel UI + self-hosted solver (the live demo).** `frontend/vercel.json` builds the UI on Vercel (project root
+directory: `frontend`) and rewrites `/api/*` to the solver running on the author's Mac, which is reachable through
+Tailscale Funnel. Every push to `main` redeploys the UI automatically. When the Mac is off, the UI says the solver is
+offline (requests time out after 20 s). To point the UI at another backend, change the `destination` in `frontend/vercel.json`.
+
+**Render (free tier, always-on backup).** The repository contains a Render Blueprint (`render.yaml`).
 Click [**Deploy to Render**](https://render.com/deploy?repo=https://github.com/AkashKishanKarri/pinn-solver), sign in
 with GitHub and confirm; Render builds the Dockerfile and redeploys on every push to `main`. On the free plan
 (512 MB RAM, 0.1 CPU) the blueprint caps collocation points at 6000 (`PINN_MAX_POINTS`); the measured peak memory

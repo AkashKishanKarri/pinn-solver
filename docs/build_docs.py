@@ -595,7 +595,11 @@ python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
                 "calls <font face='DVM'>/api/health</font>."),
               code('''docker build -t pinn-solver . && docker run -p 7860:7860 pinn-solver'''),
               P("10.3 Hosting", H2),
-              P("The live demo runs on <b>Render</b> (free plan) from the Blueprint in <font face='DVM'>render.yaml</font>, "
+              P("The live demo's web UI is hosted on <b>Vercel</b>, which rebuilds it on every push to main. Vercel forwards "
+                "<font face='DVM'>/api/*</font> to the solver running on the author's laptop, reached through Tailscale "
+                "Funnel, so solves run at full laptop speed. When the laptop is off, the UI reports that the solver is "
+                "offline. An always-on backup runs on <b>Render</b>."),
+              P("The backup runs on <b>Render</b> (free plan) from the Blueprint in <font face='DVM'>render.yaml</font>, "
                 "which redeploys on every push to main. The free plan has 512 MB RAM and 0.1 CPU. The blueprint "
                 "therefore caps collocation points at 6000 (the measured peak memory of a PDE solve is about 400 MB) "
                 "and uses one thread. Training there is roughly 10× slower than on a laptop, so within the default "
