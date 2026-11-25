@@ -1,8 +1,11 @@
 # Intelligent Differential Equation Solver Using PINNs
 
-**Live demo:** https://pinn-solver-rust.vercel.app — the UI is on Vercel; the solver runs on the author's laptop, so
+**Live demo:** https://pinnsolver.vercel.app — the UI is on Vercel; the solver runs on the author's laptop, so
 it answers only while that is on. Always-on backup (slower, ~1 min to wake): https://pinn-solver.onrender.com  
-**Documentation (PDF):** [`docs/PINN_Solver_Documentation.pdf`](docs/PINN_Solver_Documentation.pdf)
+**Documentation (PDF):** [`docs/PINN_Solver_Documentation.pdf`](docs/PINN_Solver_Documentation.pdf)  
+**Test-case catalogue:** [`docs/PINN_Solver_Test_Cases.pdf`](docs/PINN_Solver_Test_Cases.pdf) ·
+[Excel](docs/PINN_Solver_Test_Cases.xlsx): every input the tests, API checks and benchmarks give the solver, with its actual
+response (regenerate with `.venv/bin/python docs/build_testcases.py`)
 
 An **equation-aware, validation-driven solver for physics-informed neural networks (PINNs)**. You type an ODE or 1D parabolic
 PDE in plain math notation. The solver:
@@ -307,7 +310,7 @@ frontend/            React (Vite) UI: App.jsx, Plot.jsx (Plotly, lazy-loaded), a
 tests/               138 pytest tests
 scripts/             run_benchmarks.py, deploy_hf_space.sh
 benchmark_results/   measured results of configurations A–E (summary.md, csv, json)
-docs/                PDF documentation and its generator
+docs/                documentation PDF, test-case catalogue (PDF + Excel) and their generators
 Dockerfile           production image
 render.yaml          Render Blueprint (free-tier settings)
 ```
